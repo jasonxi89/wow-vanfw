@@ -1,0 +1,2 @@
+# VanFW MCP Server Dependencies
+mcp>=0.9.0

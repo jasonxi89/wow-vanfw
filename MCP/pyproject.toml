@@ -1,0 +1,18 @@
+[project]
+name = "vanfw-mcp-server"
+version = "1.0.0"
+description = "MCP Server for VanFW WoW Framework - Realtime Logging & Debugging"
+authors = [
+    {name = "VanFW Team"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=0.9.0",
+]
+
+[project.scripts]
+vanfw-mcp = "server:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_backend"
