@@ -274,6 +274,20 @@ WaitForVanFW(function()
     local function ManageDefensives()
         if not Config.autoManageStagger then return false end
 
+        -- BossTimers: dangerous ability coming within 2s → pre-defensive
+        local BTimer = VanFW.BossTimers
+        if BTimer and BTimer:InEncounter() then
+            local isDanger, remaining, timer = BTimer:IsDangerousAbilityIn(2)
+            if isDanger then
+                if Spells.FortifyingBrew:Castable() then
+                    return Spells.FortifyingBrew:SelfCast()
+                end
+                if Spells.CelestialBrew:Castable() then
+                    return Spells.CelestialBrew:SelfCast()
+                end
+            end
+        end
+
         -- Boss Awareness: proactive defensive based on WGG native data
         local BA = VanFW.BossAware
         if BA then

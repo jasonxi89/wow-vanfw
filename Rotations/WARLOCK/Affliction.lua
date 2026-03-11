@@ -458,11 +458,18 @@ WaitForVanFW(function()
             end
         end
 
-        -- DBM: save CDs if phase transition coming within 10s
-        local DBMI = VanFW.DBM
+        -- BossTimers + DBM: save CDs if dangerous ability or phase transition coming
         local shouldSaveCDs = false
-        if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
-            shouldSaveCDs = DBMI:ShouldSaveCooldowns(10)
+        local BTimer = VanFW.BossTimers
+        if BTimer and BTimer:InEncounter() then
+            local isDanger, remaining = BTimer:IsDangerousAbilityIn(5)
+            if isDanger then shouldSaveCDs = true end
+        end
+        if not shouldSaveCDs then
+            local DBMI = VanFW.DBM
+            if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
+                shouldSaveCDs = DBMI:ShouldSaveCooldowns(10)
+            end
         end
 
         -- Cooldowns: Malevolence (skip if saving for phase)
