@@ -47,7 +47,7 @@ local loadOrder = {
     "VanFW\\Alerts.lua",
     "VanFW\\MCP.lua",
     "VanFW\\DBMIntegration.lua",
-    "VanFW\\VanKili.lua",
+    -- "VanFW\\VanKili.lua",  -- DEPRECATED: Hekili killed by Midnight 12.0 addon restrictions
     "VanFW\\ToggleButton.lua",
 
 }

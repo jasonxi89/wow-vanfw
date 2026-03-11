@@ -2,6 +2,16 @@
 
 All notable changes to VanFW will be documented in this file.
 
+## [1.2.0] - 2026-03-10
+
+### Deprecated
+
+- **VanKili.lua**: Removed from default load order. Hekili was killed by Blizzard's Midnight 12.0 "Secret Values" addon restrictions — real-time combat APIs (CLEU, UnitAura, etc.) are blocked inside instances. Use hand-written Rotation scripts instead.
+
+### Note
+
+WGG scripts are NOT affected by Midnight addon restrictions. WGG operates via memory injection, not the addon API, so `CastSpellByID`, `ObjectPos`, `GetCurrentEventInfo`, `UnitHealth` etc. all still work. Only Hekili (a normal addon) was killed.
+
 ## [1.1.1] - 2026-03-10
 
 ### Fixed
@@ -37,6 +47,16 @@ All notable changes to VanFW will be documented in this file.
 # 更新日志
 
 所有 VanFW 的重要变更都记录在此文件中。
+
+## [1.2.0] - 2026-03-10
+
+### 弃用
+
+- **VanKili.lua**: 从默认加载列表移除。Hekili 被暴雪 Midnight 12.0 的 "Secret Values" 插件限制杀死 — CLEU、UnitAura 等实时战斗 API 在副本内被封锁。请使用手写 Rotation 脚本替代。
+
+### 说明
+
+WGG 脚本不受 Midnight 插件限制影响。WGG 通过内存注入运行，不走暴雪插件 API，所以 `CastSpellByID`、`ObjectPos`、`GetCurrentEventInfo`、`UnitHealth` 等全部正常工作。只有 Hekili（普通插件）被杀死。
 
 ## [1.1.1] - 2026-03-10
 

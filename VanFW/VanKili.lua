@@ -1,5 +1,20 @@
+-- =========================================================================
+-- DEPRECATED: VanKili (Hekili Integration)
+-- Hekili was killed by Blizzard's Midnight 12.0 addon restrictions.
+-- Hekili relied on real-time combat APIs (CLEU, UnitAura, etc.) that are
+-- now blocked inside instances via "Secret Values".
+-- This file is kept for reference but is no longer loaded by default.
+-- Use hand-written Rotation scripts (Rotations/{CLASS}/{Spec}.lua) instead.
+-- =========================================================================
+
 if not _G.VanFW then
     print("|cFFFF0000[VanFW]|r VanKili requires VanFW to be loaded first")
+    return
+end
+
+-- Hekili check: bail out immediately if not available (expected in 12.0+)
+if not _G.Hekili and not _G.Hekili_GetRecommendedAbility then
+    print("|cFFFFFF00[VanFW]|r VanKili skipped: Hekili not available (expected in Midnight 12.0+)")
     return
 end
 
