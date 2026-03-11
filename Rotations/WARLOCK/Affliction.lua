@@ -425,8 +425,18 @@ WaitForVanFW(function()
 
         FaceTarget(target)
 
-        -- Skip if casting/channeling
-        if StateCache.playerCasting or StateCache.playerChanneling then return false end
+        -- Skip if casting/channeling (unless standing in bad — stop cast and move)
+        local BA = VanFW.BossAware
+        if StateCache.playerCasting or StateCache.playerChanneling then
+            if BA and BA:IsStandingInBad() then
+                -- Standing in fire while casting → stop cast so player can move
+                if _G.SpellStopCasting then
+                    pcall(_G.SpellStopCasting)
+                end
+            else
+                return false
+            end
+        end
 
         -- Defensive
         if DefensiveRotation() then return true end

@@ -274,16 +274,27 @@ WaitForVanFW(function()
     local function ManageDefensives()
         if not Config.autoManageStagger then return false end
 
-        -- DBM: proactive defensive if big damage incoming
+        -- Boss Awareness: proactive defensive based on WGG native data
+        local BA = VanFW.BossAware
+        if BA then
+            local threat, reason = BA:GetThreatLevel()
+
+            -- Missile or ground effect → we should move, but also pre-shield
+            if threat == "MOVE_NOW" or threat == "MOVE_SOON" then
+                if Spells.CelestialBrew:Castable() then
+                    return Spells.CelestialBrew:SelfCast()
+                end
+            end
+        end
+
+        -- DBM fallback: proactive defensive if big damage incoming
         local DBMI = VanFW.DBM
         if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
             local bigDmg, remaining = DBMI:IsBigDamageIncoming(3)
             if bigDmg then
-                -- Big hit coming within 3s → pre-Fortifying if HP not full
                 if StateCache.playerHP < 80 and Spells.FortifyingBrew:Castable() then
                     return Spells.FortifyingBrew:SelfCast()
                 end
-                -- Or at least Celestial Brew for absorb
                 if Spells.CelestialBrew:Castable() then
                     return Spells.CelestialBrew:SelfCast()
                 end
