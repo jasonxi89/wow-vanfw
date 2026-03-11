@@ -8,42 +8,65 @@ VanFW.targeting = {
   ignoreCC = true,
 }
 
--- Broad list of common CC spell IDs used as fallback when aura API is unavailable
+-- Breakable CC spell IDs — damage will cancel these effects
+-- Only long/breakable CC here; short stuns (HoJ, Kidney Shot, etc.) are excluded
+-- because damage does NOT break stuns and hitting stunned targets is intended
+-- Verified against Wowhead 2026-03-10
 local COMMON_CC_DEBUFFS = {
-  -- Polymorph variants
-  118, 28271, 28272, 61305, 61721, 61780, 126819, 161353, 161354, 161355, 161372,
-  -- Hex
-  51514, 210873, 211004, 211010, 211015,
-  -- Repentance
-  20066,
-  -- Sap
-  6770,
-  -- Hibernate
-  2637,
-  -- Entangling Roots
-  339,
-  -- Fear
-  5782, 118699,
-  -- Psychic Scream
-  8122,
-  -- Intimidating Shout
-  5246,
-  -- Freezing Trap
-  3355,
-  -- Paralysis
-  115078,
-  -- Blind
-  2094,
-  -- Banish
-  710,
-  -- Cyclone
-  33786,
-  -- Ring of Frost
-  82691,
-  -- Imprison
-  217832,
-  -- Incapacitating Roar
-  99,
+  -- Mage: Polymorph variants (all 60s, breakable)
+  118,    -- Polymorph (Sheep)
+  28271,  -- Polymorph (Turtle)
+  28272,  -- Polymorph (Pig)
+  61305,  -- Polymorph (Black Cat)
+  61721,  -- Polymorph (Rabbit)
+  61780,  -- Polymorph (Turkey)
+  126819, -- Polymorph (Porcupine)
+  161353, -- Polymorph (Polar Bear Cub)
+  161354, -- Polymorph (Monkey)
+  161355, -- Polymorph (Penguin)
+  161372, -- Polymorph (Peacock)
+  383121, -- Mass Polymorph (15s)
+  31661,  -- Dragon's Breath (4s disorient)
+  82691,  -- Ring of Frost (10s)
+  -- Shaman: Hex variants (all 60s, breakable)
+  51514,  -- Hex (Frog)
+  210873, -- Hex (Compy)
+  211004, -- Hex (Spider)
+  211010, -- Hex (Snake)
+  211015, -- Hex (Cockroach)
+  -- Paladin
+  20066,  -- Repentance (60s)
+  10326,  -- Turn Evil (40s fear)
+  -- Rogue
+  6770,   -- Sap (60s)
+  2094,   -- Blind (60s)
+  1776,   -- Gouge (4s)
+  -- Druid
+  2637,   -- Hibernate (40s)
+  339,    -- Entangling Roots (30s)
+  33786,  -- Cyclone (6s)
+  99,     -- Incapacitating Roar (3s)
+  -- Warlock
+  5782,   -- Fear (20s)
+  118699, -- Fear (alternate ID)
+  710,    -- Banish (30s)
+  -- Priest
+  8122,   -- Psychic Scream (8s)
+  9484,   -- Shackle Undead (50s)
+  605,    -- Mind Control (30s)
+  -- Warrior
+  5246,   -- Intimidating Shout (8s)
+  -- Hunter
+  3355,   -- Freezing Trap Effect (debuff aura)
+  187650, -- Freezing Trap (60s, retail ability ID)
+  -- Monk
+  115078, -- Paralysis (60s)
+  -- Demon Hunter
+  217832, -- Imprison (60s)
+  -- Evoker
+  360806, -- Sleep Walk (20s disorient)
+  -- Racial
+  107079, -- Quaking Palm (4s, Pandaren)
 }
 
 local function CalculateTargetPriority(enemy)

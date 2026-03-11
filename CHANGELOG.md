@@ -2,6 +2,12 @@
 
 All notable changes to VanFW will be documented in this file.
 
+## [1.1.1] - 2026-03-10
+
+### Fixed
+
+- **Targeting.lua**: Added 8 missing CC spell IDs verified via Wowhead: Sleep Walk (360806), Shackle Undead (9484), Turn Evil (10326), Mind Control (605), Dragon's Breath (31661), Gouge (1776), Quaking Palm (107079), Mass Polymorph (383121), Freezing Trap retail ID (187650). Total CC list now 47 spell IDs.
+
 ## [1.1.0] - 2026-03-10
 
 ### Fixed
@@ -31,6 +37,12 @@ All notable changes to VanFW will be documented in this file.
 # 更新日志
 
 所有 VanFW 的重要变更都记录在此文件中。
+
+## [1.1.1] - 2026-03-10
+
+### 修复
+
+- **Targeting.lua**: 通过 Wowhead 验证并补充 8 个缺失的 CC 技能 ID：Sleep Walk (360806)、Shackle Undead (9484)、Turn Evil (10326)、Mind Control (605)、Dragon's Breath (31661)、Gouge (1776)、Quaking Palm (107079)、Mass Polymorph (383121)、Freezing Trap 零售版 ID (187650)。CC 列表总计 47 个技能 ID。
 
 ## [1.1.0] - 2026-03-10
 
