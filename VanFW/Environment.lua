@@ -88,6 +88,9 @@ local VanFWEnv = {
     CreateFrame = _G.CreateFrame,
     SlashCmdList = _G.SlashCmdList,
 
+    -- DBM integration
+    DBM = _G.DBM,
+
     print = print,
 
     WGG_GetObjectCount = _G.WGG_GetObjectCount,

@@ -274,6 +274,22 @@ WaitForVanFW(function()
     local function ManageDefensives()
         if not Config.autoManageStagger then return false end
 
+        -- DBM: proactive defensive if big damage incoming
+        local DBMI = VanFW.DBM
+        if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
+            local bigDmg, remaining = DBMI:IsBigDamageIncoming(3)
+            if bigDmg then
+                -- Big hit coming within 3s → pre-Fortifying if HP not full
+                if StateCache.playerHP < 80 and Spells.FortifyingBrew:Castable() then
+                    return Spells.FortifyingBrew:SelfCast()
+                end
+                -- Or at least Celestial Brew for absorb
+                if Spells.CelestialBrew:Castable() then
+                    return Spells.CelestialBrew:SelfCast()
+                end
+            end
+        end
+
         -- Fortifying Brew — emergency
         if StateCache.playerHP < Config.fortifyingBrewThreshold then
             if Spells.FortifyingBrew:Castable() then

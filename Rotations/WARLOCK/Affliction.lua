@@ -448,15 +448,22 @@ WaitForVanFW(function()
             end
         end
 
-        -- Cooldowns: Malevolence
-        if Config.useMalevolence and StateCache.hasMalevolenceTalent then
+        -- DBM: save CDs if phase transition coming within 10s
+        local DBMI = VanFW.DBM
+        local shouldSaveCDs = false
+        if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
+            shouldSaveCDs = DBMI:ShouldSaveCooldowns(10)
+        end
+
+        -- Cooldowns: Malevolence (skip if saving for phase)
+        if not shouldSaveCDs and Config.useMalevolence and StateCache.hasMalevolenceTalent then
             if Spells.Malevolence:Castable() then
                 return Spells.Malevolence:SelfCast()
             end
         end
 
-        -- Cooldowns: Darkglare (with pooled shards)
-        if Config.useDarkglare and StateCache.hasAgony and (StateCache.hasCorruption or StateCache.hasWither) and StateCache.hasUA then
+        -- Cooldowns: Darkglare (skip if saving for phase)
+        if not shouldSaveCDs and Config.useDarkglare and StateCache.hasAgony and (StateCache.hasCorruption or StateCache.hasWither) and StateCache.hasUA then
             if Spells.SummonDarkglare:Castable() then
                 return Spells.SummonDarkglare:SelfCast()
             end
