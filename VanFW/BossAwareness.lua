@@ -69,10 +69,16 @@ local KNOWN_SAFE_AREATRIGGERS = {
 ---------------------------------------------------------------------------
 local function UpdateGroundEffects()
     if not BA.config.detectAreaTriggers then return end
+    if not _G.WGG_AreaTrigger then return end
 
     local effects = {}
     local playerX, playerY, playerZ = VanFW:PlayerPosition()
-    if not playerX then return end
+    if not playerX then
+        BA.state.dangerousGroundEffects = {}
+        BA.state.isStandingInBad = false
+        BA.state.nearestGroundEffectDist = 999
+        return
+    end
 
     local isInDanger = false
     local nearestDist = 999
@@ -86,13 +92,25 @@ local function UpdateGroundEffects()
 
             -- ObjectType 11 = AreaTrigger
             if objType == 11 then
-                local success, data = pcall(VanFW.AreaTrigger or _G.WGG_AreaTrigger, obj)
+                local success, data = pcall(_G.WGG_AreaTrigger, obj)
                 if success and data then
                     local atX, atY, atZ = data.x, data.y, data.z
-                    local radius = data.radius or 3
+                    local radius = (data.radius and data.radius > 0) and data.radius or 3
                     local spellId = data.spellId
 
-                    if atX and not KNOWN_SAFE_AREATRIGGERS[spellId] then
+                    -- Check if the caster is friendly (heals, barriers, etc.)
+                    local casterIsFriendly = false
+                    if data.casterGUID then
+                        local resolveToken = UnitTokenFromGUID or (VanFW.GetTokenByGUID and function(guid) return VanFW:GetTokenByGUID(guid) end)
+                        if resolveToken then
+                            local casterUnit = resolveToken(data.casterGUID)
+                            if casterUnit and UnitIsFriend("player", casterUnit) then
+                                casterIsFriendly = true
+                            end
+                        end
+                    end
+
+                    if atX and not KNOWN_SAFE_AREATRIGGERS[spellId] and not casterIsFriendly then
                         local dx = playerX - atX
                         local dy = playerY - atY
                         local dz = playerZ - atZ
@@ -112,7 +130,13 @@ local function UpdateGroundEffects()
                             }
                             table.insert(effects, effect)
 
-                            if dist <= radius then
+                            -- Hysteresis: once flagged, require radius + 1 to clear
+                            local standingThreshold = radius
+                            if BA.state.isStandingInBad then
+                                standingThreshold = radius + 1
+                            end
+
+                            if dist <= standingThreshold then
                                 isInDanger = true
                             end
 
@@ -140,7 +164,12 @@ local function UpdateMissiles()
 
     local missiles = {}
     local playerX, playerY, playerZ = VanFW:PlayerPosition()
-    if not playerX then return end
+    if not playerX then
+        BA.state.incomingMissiles = {}
+        BA.state.missileIncoming = false
+        BA.state.missileETA = 999
+        return
+    end
 
     local playerGUID = UnitGUID("player")
     local hasDanger = false
@@ -151,10 +180,11 @@ local function UpdateMissiles()
         local spellID, _, mx, my, mz, srcGUID, sx, sy, sz, tgtGUID, tx, ty, tz = _G.WGG_GetMissileWithIndex(i)
 
         if spellID and tx then
-            -- Check if missile is heading toward player
+            -- Check if missile is heading toward player (3D distance)
             local dx = playerX - tx
             local dy = playerY - ty
-            local impactDist = math.sqrt(dx * dx + dy * dy)
+            local dz = playerZ - tz
+            local impactDist = math.sqrt(dx * dx + dy * dy + dz * dz)
 
             if impactDist < BA.config.missileDangerRadius or tgtGUID == playerGUID then
                 -- Estimate ETA based on missile travel
@@ -201,10 +231,13 @@ local function UpdateBossCasts()
 
     local casts = {}
     local hasCast = false
-    local canInterrupt = false
     local shortestRemaining = 999
     local shortestSpellId = nil
     local shortestSpellName = nil
+    -- Track interruptible casts separately from overall shortest cast
+    local shortestInterruptRemaining = 999
+    local shortestInterruptSpellId = nil
+    local shortestInterruptSpellName = nil
 
     -- Check boss1-boss5 unit tokens
     for i = 1, 5 do
@@ -233,7 +266,12 @@ local function UpdateBossCasts()
                         shortestRemaining = remaining
                         shortestSpellId = spellId
                         shortestSpellName = castName
-                        canInterrupt = isInterruptible
+                    end
+
+                    if isInterruptible and remaining < shortestInterruptRemaining then
+                        shortestInterruptRemaining = remaining
+                        shortestInterruptSpellId = spellId
+                        shortestInterruptSpellName = castName
                     end
                 end
             end
@@ -257,11 +295,16 @@ local function UpdateBossCasts()
                     table.insert(casts, cast)
                     hasCast = true
 
-                    if isInterruptible and remaining < shortestRemaining then
+                    if remaining < shortestRemaining then
                         shortestRemaining = remaining
                         shortestSpellId = spellIdCh
                         shortestSpellName = chanName
-                        canInterrupt = true
+                    end
+
+                    if isInterruptible and remaining < shortestInterruptRemaining then
+                        shortestInterruptRemaining = remaining
+                        shortestInterruptSpellId = spellIdCh
+                        shortestInterruptSpellName = chanName
                     end
                 end
             end
@@ -269,7 +312,7 @@ local function UpdateBossCasts()
     end
 
     -- Also check via WGG object manager for non-boss dangerous casts
-    for _, enemy in ipairs(VanFW.objects.enemies) do
+    for _, enemy in ipairs(VanFW.objects.enemies or {}) do
         if enemy:exists() and not enemy:dead() then
             local casting = enemy:casting and enemy:casting()
             local channeling = enemy:channeling and enemy:channeling()
@@ -279,33 +322,29 @@ local function UpdateBossCasts()
                 local chanRemains = channeling and (enemy.channelRemains and enemy:channelRemains() or 0) or 0
                 local remains = casting and castRemains or chanRemains
 
-                if interruptible and remains > 0 and remains < shortestRemaining then
+                if remains > 0 and remains < shortestRemaining then
                     shortestRemaining = remains
-                    canInterrupt = true
+                end
+
+                if interruptible and remains > 0 and remains < shortestInterruptRemaining then
+                    shortestInterruptRemaining = remains
                 end
             end
         end
     end
 
+    local canInterrupt = shortestInterruptRemaining < 999
     BA.state.bossCasts = casts
     BA.state.bossIsCasting = hasCast
     BA.state.bossCanBeInterrupted = canInterrupt
-    BA.state.bossCastRemaining = shortestRemaining < 999 and shortestRemaining or 0
-    BA.state.bossCastSpellId = shortestSpellId
-    BA.state.bossCastSpellName = shortestSpellName
+    BA.state.bossCastRemaining = shortestInterruptRemaining < 999 and shortestInterruptRemaining or (shortestRemaining < 999 and shortestRemaining or 0)
+    BA.state.bossCastSpellId = shortestInterruptSpellId or shortestSpellId
+    BA.state.bossCastSpellName = shortestInterruptSpellName or shortestSpellName
 end
 
 ---------------------------------------------------------------------------
 -- Dangerous Debuff Detection on Player
 ---------------------------------------------------------------------------
-local DANGEROUS_DEBUFF_TYPES = {
-    -- Dispel types that indicate danger
-    Magic = true,
-    Curse = true,
-    Disease = true,
-    Poison = true,
-}
-
 local function UpdateDangerousDebuffs()
     if not BA.config.detectDangerousDebuffs then return end
 
@@ -343,6 +382,7 @@ end
 ---------------------------------------------------------------------------
 local function UpdateBossAwareness()
     if not BA.config.enabled then return end
+    if not VanFW.inCombat then return end
 
     local currentTime = GetTime()
     if currentTime - BA.state.lastUpdate < BA.config.updateInterval then return end
@@ -437,7 +477,7 @@ function BA:GetThreatLevel()
     if self.state.missileIncoming and self.state.missileETA < 1.5 then
         return "MOVE_SOON", "Missile impact in " .. string.format("%.1f", self.state.missileETA) .. "s"
     end
-    if self.state.bossCanBeInterrupted and self.state.bossCastRemaining < 2 then
+    if self.state.bossCanBeInterrupted and self.state.bossCastRemaining > 0 and self.state.bossCastRemaining < 2 then
         return "INTERRUPT", "Interruptible cast: " .. (self.state.bossCastSpellName or "Unknown")
     end
     if self.state.hasDangerousDebuff then

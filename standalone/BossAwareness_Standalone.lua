@@ -1,25 +1,24 @@
 --[[
 ================================================================================
   BossAwareness Standalone - WGG Native Boss Mechanic Detection
-  Version: 1.0.0
+  Version: 1.0.1
 
   Zero dependencies. Only requires WGG API.
   Detects ground effects, missiles, boss casts, and dangerous debuffs
   using WGG memory reads — NOT affected by Midnight 12.0 addon restrictions.
+  Auto-updates during combat only; no manual Update() call needed.
 
   SETUP:
     1. Put this file in C:\WGG\
     2. In your script: local BA = _G.BossAwareness
-    3. Call BA:Update() in your rotation tick (or it auto-updates if loaded via F3)
-    4. Query: BA:IsStandingInBad(), BA:CanInterruptBoss(), etc.
+    3. Query: BA:IsStandingInBad(), BA:CanInterruptBoss(), etc.
+       (auto-updates in combat via OnUpdate frame)
 
   QUICK EXAMPLE:
     local BA = _G.BossAwareness
 
     -- In your rotation function:
     local function MyRotation()
-        BA:Update()
-
         -- Am I standing in fire?
         if BA:IsStandingInBad() then
             -- stop casting / move
@@ -56,7 +55,8 @@
     BA:ShouldMove()                   bool (ground OR missile)
     BA:GetThreatLevel()               string, reason
 
-  CONFIG (optional, change before calling Update):
+  CONFIG (optional):
+    BA.config.enabled = true
     BA.config.areaTriggerDangerRadius = 5
     BA.config.missileDangerRadius = 4
     BA.config.updateInterval = 0.05
@@ -65,12 +65,28 @@
 ]]
 
 local BA = {}
+local VERSION = "1.0.1"
+
+-- Fix 2: Conflict detection — warn if replacing an older version
+if _G.BossAwareness and _G.BossAwareness.VERSION then
+    print("|cFFFFFF00[BossAwareness]|r Replacing v" .. _G.BossAwareness.VERSION .. " with v" .. VERSION)
+end
+
+BA.VERSION = VERSION
+
+-- Fix 3: Environment validation — bail out if WGG API is missing
+if not _G.WGG_GetPlayerPosition then
+    print("|cFFFF0000[BossAwareness]|r WGG API not found. Module disabled.")
+    return
+end
+
 _G.BossAwareness = BA
 
 ---------------------------------------------------------------------------
 -- Config
 ---------------------------------------------------------------------------
 BA.config = {
+    enabled = true,
     detectAreaTriggers = true,
     areaTriggerDangerRadius = 5,
     detectMissiles = true,
@@ -149,22 +165,38 @@ local function ScanGroundEffects(px, py, pz)
                 local ok, data = pcall(_G.WGG_AreaTrigger, obj)
                 if ok and data and data.x then
                     if not SAFE_AREATRIGGERS[data.spellId] then
-                        local dist = Dist3D(px, py, pz, data.x, data.y, data.z)
-                        local radius = data.radius or 3
-                        local effectiveRadius = radius + BA.config.areaTriggerDangerRadius
+                        -- Fix 4: Skip AreaTriggers from friendly casters
+                        local casterIsFriendly = false
+                        if data.casterGUID then
+                            local resolveToken = UnitTokenFromGUID
+                            if resolveToken then
+                                local casterUnit = resolveToken(data.casterGUID)
+                                if casterUnit and UnitIsFriend("player", casterUnit) then
+                                    casterIsFriendly = true
+                                end
+                            end
+                        end
 
-                        if dist < effectiveRadius then
-                            table.insert(effects, {
-                                x = data.x, y = data.y, z = data.z,
-                                radius = radius,
-                                distance = dist,
-                                spellId = data.spellId,
-                                casterGUID = data.casterGUID,
-                                duration = data.duration,
-                                isInside = dist <= radius,
-                            })
-                            if dist <= radius then isInDanger = true end
-                            if dist < nearestDist then nearestDist = dist end
+                        if not casterIsFriendly then
+                            local dist = Dist3D(px, py, pz, data.x, data.y, data.z)
+                            -- Fix 5: Validate radius (fallback to 3 if missing/invalid)
+                            local rawRadius = data.radius
+                            local radius = (rawRadius and rawRadius > 0) and rawRadius or 3
+                            local effectiveRadius = radius + BA.config.areaTriggerDangerRadius
+
+                            if dist < effectiveRadius then
+                                table.insert(effects, {
+                                    x = data.x, y = data.y, z = data.z,
+                                    radius = radius,
+                                    distance = dist,
+                                    spellId = data.spellId,
+                                    casterGUID = data.casterGUID,
+                                    duration = data.duration,
+                                    isInside = dist <= radius,
+                                })
+                                if dist <= radius then isInDanger = true end
+                                if dist < nearestDist then nearestDist = dist end
+                            end
                         end
                     end
                 end
@@ -347,12 +379,21 @@ end
 -- Main Update (call this in your rotation tick)
 ---------------------------------------------------------------------------
 function BA:Update()
+    if not self.config.enabled then return end
+
     local now = GetTime()
     if now - self.state.lastUpdate < self.config.updateInterval then return end
     self.state.lastUpdate = now
 
     local px, py, pz = GetPlayerPos()
-    if not px then return end
+    if not px then
+        -- Fix 6: Reset danger states when player position unavailable (dead/loading)
+        self.state.isStandingInBad = false
+        self.state.missileIncoming = false
+        self.state.bossIsCasting = false
+        self.state.hasDangerousDebuff = false
+        return
+    end
 
     ScanGroundEffects(px, py, pz)
     ScanMissiles(px, py, pz)
@@ -439,11 +480,29 @@ function BA:GetThreatLevel()
 end
 
 ---------------------------------------------------------------------------
--- Auto-update via OnUpdate frame (optional, works standalone)
+-- Auto-update: combat-aware OnUpdate frame
 ---------------------------------------------------------------------------
+local inCombat = false
 local frame = CreateFrame("Frame")
 local elapsed = 0
+
+frame:RegisterEvent("PLAYER_REGEN_DISABLED")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+frame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_DISABLED" then
+        inCombat = true
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        inCombat = false
+        -- Reset state on combat end
+        BA.state.isStandingInBad = false
+        BA.state.missileIncoming = false
+        BA.state.bossIsCasting = false
+        BA.state.hasDangerousDebuff = false
+    end
+end)
+
 frame:SetScript("OnUpdate", function(self, dt)
+    if not inCombat then return end
     elapsed = elapsed + dt
     if elapsed >= BA.config.updateInterval then
         elapsed = 0
@@ -452,5 +511,5 @@ frame:SetScript("OnUpdate", function(self, dt)
 end)
 
 if BA.config.debug then
-    print("|cFF00FF00[BossAwareness]|r Standalone module loaded")
+    print("|cFF00FF00[BossAwareness]|r Standalone v" .. VERSION .. " loaded")
 end

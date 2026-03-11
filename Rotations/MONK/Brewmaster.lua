@@ -276,10 +276,10 @@ WaitForVanFW(function()
 
         -- BossTimers: dangerous ability coming within 2s → pre-defensive
         local BTimer = VanFW.BossTimers
-        if BTimer and BTimer:InEncounter() then
+        if BTimer and BTimer.InEncounter and BTimer:InEncounter() then
             local isDanger, remaining, timer = BTimer:IsDangerousAbilityIn(2)
             if isDanger then
-                if Spells.FortifyingBrew:Castable() then
+                if StateCache.playerHP < 70 and Spells.FortifyingBrew:Castable() then
                     return Spells.FortifyingBrew:SelfCast()
                 end
                 if Spells.CelestialBrew:Castable() then
@@ -290,7 +290,7 @@ WaitForVanFW(function()
 
         -- Boss Awareness: proactive defensive based on WGG native data
         local BA = VanFW.BossAware
-        if BA then
+        if BA and BA.GetThreatLevel then
             local threat, reason = BA:GetThreatLevel()
 
             -- Missile or ground effect → we should move, but also pre-shield
@@ -303,7 +303,7 @@ WaitForVanFW(function()
 
         -- DBM fallback: proactive defensive if big damage incoming
         local DBMI = VanFW.DBM
-        if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
+        if DBMI and DBMI.IsAvailable and DBMI:IsAvailable() and DBMI.InEncounter and DBMI:InEncounter() then
             local bigDmg, remaining = DBMI:IsBigDamageIncoming(3)
             if bigDmg then
                 if StateCache.playerHP < 80 and Spells.FortifyingBrew:Castable() then

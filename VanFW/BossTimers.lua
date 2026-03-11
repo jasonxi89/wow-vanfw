@@ -1,6 +1,6 @@
 -- VanFW Boss Timers Module
 -- Auto-learns boss ability intervals + supports preset tables
--- Uses WGG GetCurrentEventInfo() to detect boss casts (bypasses Midnight CLEU block)
+-- Uses UnitCastingInfo/UnitChannelInfo polling on boss frames (no CLEU dependency)
 
 local VanFW = VanFW
 if not VanFW then return end
@@ -17,7 +17,7 @@ BT.config = {
     saveLearnedData = true,
     dataPath = "c:\\WGG\\cfg\\boss_timers.json",
     -- How many casts to observe before trusting the learned interval
-    minSamples = 2,
+    minSamples = 3,
     -- Tolerance for interval variation (if interval varies > this, it's not periodic)
     intervalTolerance = 3.0,
     debug = false,
@@ -85,6 +85,7 @@ function BT:StartEncounter(bossName)
     self.state.encounterName = bossName
     self.state.encounterStart = GetTime()
     self.state.observed = {}
+    self.state.learned = {}
     self.state.activeTimers = {}
     self.state.castHistory = {}
 
@@ -125,7 +126,7 @@ function BT:EndEncounter()
 end
 
 ---------------------------------------------------------------------------
--- Cast Detection (called from CLEU hook or rotation tick)
+-- Cast Detection (called from onTick polling)
 ---------------------------------------------------------------------------
 function BT:OnBossCast(spellId, spellName, sourceGUID)
     if not self.state.inEncounter then return end
@@ -152,6 +153,9 @@ function BT:OnBossCast(spellId, spellName, sourceGUID)
         obs.lastCast = now
         obs.count = obs.count + 1
         table.insert(obs.times, now)
+        if #obs.times > 20 then
+            table.remove(obs.times, 1)
+        end
 
         -- Auto-learn: calculate average interval
         if self.config.autoLearn and obs.count >= self.config.minSamples then
@@ -246,43 +250,41 @@ function BT:LearnInterval(spellId, obs)
     end
 end
 
----------------------------------------------------------------------------
--- CLEU Hook (WGG bypasses Midnight CLEU block)
----------------------------------------------------------------------------
-local function ProcessCombatLog()
-    if not BT.config.enabled or not BT.state.inEncounter then return end
-    if not _G.WGG_GetCurrentEventInfo then return end
-
-    local ok, timestamp, subEvent, _, srcGUID, srcName, _, _, _, _, _, _, spellId, spellName = pcall(_G.WGG_GetCurrentEventInfo)
-    if not ok then return end
-
-    if subEvent == "SPELL_CAST_START" or subEvent == "SPELL_CAST_SUCCESS" then
-        -- Only track enemy casts
-        if srcGUID and srcName then
-            local srcType = srcGUID:sub(1, 8)
-            -- Creature or Vehicle GUID prefix
-            if srcType == "Creature" or srcGUID:find("^Creature") or srcGUID:find("^Vehicle") then
-                BT:OnBossCast(spellId, spellName, srcGUID)
-            end
-        end
-    end
-end
-
--- Hook into WGG's CallProtected for CLEU access
+-- Boss frame polling via onTick
 if VanFW.RegisterCallback then
     VanFW:RegisterCallback("onTick", function()
         if BT.state.inEncounter then
-            -- Process via boss unit casting detection (fallback)
+            -- Safety net: auto-end encounter after 45 minutes
+            if BT:GetEncounterDuration() > 2700 then
+                if BT.config.debug then
+                    VanFW:Print("[BossTimers] Encounter timeout (45m), auto-ending")
+                end
+                BT:EndEncounter()
+                return
+            end
+
+            -- Process via boss unit casting/channeling detection
             for i = 1, 5 do
                 local unit = "boss" .. i
                 if UnitExists(unit) and not UnitIsDead(unit) then
+                    local guid = UnitGUID(unit)
+                    local now = GetTime()
+
+                    -- Check casts
                     local castName, _, _, _, _, _, _, _, _, spellId = UnitCastingInfo(unit)
                     if castName and spellId then
-                        local guid = UnitGUID(unit)
-                        -- Debounce: only record if not recently recorded
                         local obs = BT.state.observed[spellId]
-                        if not obs or (GetTime() - obs.lastCast) > 3 then
+                        if not obs or (now - obs.lastCast) > 3 then
                             BT:OnBossCast(spellId, castName, guid)
+                        end
+                    end
+
+                    -- Check channels
+                    local chanName, _, _, _, _, _, _, _, chanSpellId = UnitChannelInfo(unit)
+                    if chanName and chanSpellId then
+                        local obs = BT.state.observed[chanSpellId]
+                        if not obs or (now - obs.lastCast) > 3 then
+                            BT:OnBossCast(chanSpellId, chanName, guid)
                         end
                     end
                 end
@@ -295,21 +297,34 @@ if VanFW.RegisterCallback then
 
     -- Auto-detect encounter start/end
     VanFW:RegisterCallback("onCombatStart", function()
-        -- Try to detect boss name
+        -- Detect all boss names for multi-boss encounters
+        local names = {}
         for i = 1, 5 do
             local unit = "boss" .. i
             if UnitExists(unit) then
                 local name = UnitName(unit)
                 if name then
-                    BT:StartEncounter(name)
-                    return
+                    local isDuplicate = false
+                    for _, existing in ipairs(names) do
+                        if existing == name then
+                            isDuplicate = true
+                            break
+                        end
+                    end
+                    if not isDuplicate then
+                        table.insert(names, name)
+                    end
                 end
             end
         end
-        -- Fallback: use target name
+        if #names > 0 then
+            BT:StartEncounter(table.concat(names, " & "))
+            return
+        end
+        -- Fallback: use target name for world bosses
         if UnitExists("target") then
             local classification = UnitClassification("target")
-            if classification == "worldboss" or classification == "rareelite" then
+            if classification == "worldboss" then
                 BT:StartEncounter(UnitName("target") or "Unknown")
             end
         end
@@ -502,7 +517,8 @@ function BT:CleanupTimers()
     local now = GetTime()
     for spellId, timer in pairs(self.state.activeTimers) do
         -- Remove timers that are way past due (missed cast or phase skip)
-        if now - timer.expiresAt > 10 then
+        local grace = math.max(15, (timer.interval or 30) * 0.5)
+        if now - timer.expiresAt > grace then
             self.state.activeTimers[spellId] = nil
         end
     end

@@ -428,10 +428,16 @@ WaitForVanFW(function()
         -- Skip if casting/channeling (unless standing in bad — stop cast and move)
         local BA = VanFW.BossAware
         if StateCache.playerCasting or StateCache.playerChanneling then
-            if BA and BA:IsStandingInBad() then
-                -- Standing in fire while casting → stop cast so player can move
-                if _G.SpellStopCasting then
-                    pcall(_G.SpellStopCasting)
+            if BA and BA.IsStandingInBad and BA:IsStandingInBad() then
+                -- Only cancel if cast has > 0.5s remaining
+                local _, _, _, _, endTime = UnitCastingInfo("player")
+                local castRemaining = endTime and ((endTime / 1000) - GetTime()) or 0
+                if castRemaining > 0.5 then
+                    if _G.SpellStopCasting then
+                        pcall(_G.SpellStopCasting)
+                    end
+                else
+                    return false  -- let short cast finish
                 end
             else
                 return false
@@ -458,18 +464,11 @@ WaitForVanFW(function()
             end
         end
 
-        -- BossTimers + DBM: save CDs if dangerous ability or phase transition coming
+        -- DBM: save DPS CDs if phase transition coming within 5s
         local shouldSaveCDs = false
-        local BTimer = VanFW.BossTimers
-        if BTimer and BTimer:InEncounter() then
-            local isDanger, remaining = BTimer:IsDangerousAbilityIn(5)
-            if isDanger then shouldSaveCDs = true end
-        end
-        if not shouldSaveCDs then
-            local DBMI = VanFW.DBM
-            if DBMI and DBMI:IsAvailable() and DBMI:InEncounter() then
-                shouldSaveCDs = DBMI:ShouldSaveCooldowns(10)
-            end
+        local DBMI = VanFW.DBM
+        if DBMI and DBMI.IsAvailable and DBMI:IsAvailable() and DBMI.InEncounter and DBMI:InEncounter() then
+            shouldSaveCDs = DBMI:ShouldSaveCooldowns(5)
         end
 
         -- Cooldowns: Malevolence (skip if saving for phase)
@@ -550,7 +549,24 @@ WaitForVanFW(function()
 
         FaceTarget(target)
 
-        if StateCache.playerCasting or StateCache.playerChanneling then return false end
+        -- Skip if casting/channeling (unless standing in bad — stop cast and move)
+        local BA = VanFW.BossAware
+        if StateCache.playerCasting or StateCache.playerChanneling then
+            if BA and BA.IsStandingInBad and BA:IsStandingInBad() then
+                -- Only cancel if cast has > 0.5s remaining
+                local _, _, _, _, endTime = UnitCastingInfo("player")
+                local castRemaining = endTime and ((endTime / 1000) - GetTime()) or 0
+                if castRemaining > 0.5 then
+                    if _G.SpellStopCasting then
+                        pcall(_G.SpellStopCasting)
+                    end
+                else
+                    return false  -- let short cast finish
+                end
+            else
+                return false
+            end
+        end
 
         -- Defensive
         if DefensiveRotation() then return true end
