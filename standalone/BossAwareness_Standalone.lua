@@ -376,7 +376,7 @@ local function ScanDebuffs()
 end
 
 ---------------------------------------------------------------------------
--- Main Update (call this in your rotation tick)
+-- Main Update (called automatically during combat)
 ---------------------------------------------------------------------------
 function BA:Update()
     if not self.config.enabled then return end
