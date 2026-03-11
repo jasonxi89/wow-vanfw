@@ -47,6 +47,7 @@ local loadOrder = {
     "VanFW\\Alerts.lua",
     "VanFW\\MCP.lua",
     "VanFW\\VanKili.lua",
+    "VanFW\\ToggleButton.lua",
 
 }
 
