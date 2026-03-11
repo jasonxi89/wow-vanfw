@@ -493,11 +493,21 @@ frame:SetScript("OnEvent", function(self, event)
         inCombat = true
     elseif event == "PLAYER_REGEN_ENABLED" then
         inCombat = false
-        -- Reset state on combat end
+        -- Reset all state on combat end
         BA.state.isStandingInBad = false
         BA.state.missileIncoming = false
         BA.state.bossIsCasting = false
+        BA.state.bossCanBeInterrupted = false
         BA.state.hasDangerousDebuff = false
+        BA.state.dangerousGroundEffects = {}
+        BA.state.incomingMissiles = {}
+        BA.state.bossCasts = {}
+        BA.state.dangerousDebuffs = {}
+        BA.state.nearestGroundEffectDist = 999
+        BA.state.missileETA = 999
+        BA.state.bossCastRemaining = 0
+        BA.state.bossCastSpellId = nil
+        BA.state.bossCastSpellName = nil
     end
 end)
 
